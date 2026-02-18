@@ -1,15 +1,22 @@
 package com.curso.android.module4.cityspots.ui.screens
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,11 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import coil.compose.SubcomposeAsyncImage
-import coil.compose.SubcomposeAsyncImageContent
 import coil.imageLoader
 import coil.request.ImageRequest
 import com.curso.android.module4.cityspots.data.entity.SpotEntity
@@ -123,6 +129,17 @@ fun MapScreen(
     // Context para operaciones con Coil
     val context = LocalContext.current
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // Esto se ejecuta DESPUÉS de que el usuario toca "Permitir" o "Denegar"
+        val isGranted = permissions.values.all { it }
+        if (isGranted) {
+            viewModel.startLocationUpdates()
+            viewModel.loadUserLocation()
+        }
+    }
+
     // =========================================================================
     // PRE-CARGA DE IMÁGENES
     // =========================================================================
@@ -158,7 +175,24 @@ fun MapScreen(
      * Aquí cargamos la ubicación inicial del usuario al montar la pantalla.
      */
     LaunchedEffect(Unit) {
-        viewModel.loadUserLocation()
+        // Verificamos si YA tenemos permisos desde antes
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            // Si ya tiene permiso, arrancamos el GPS directo
+            viewModel.startLocationUpdates()
+            viewModel.loadUserLocation()
+        }
+        else {
+            // Si NO tiene permiso, usamos el lanzador que definimos arriba
+            permissionLauncher.launch(arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ))
+        }
     }
 
     // Mostrar errores en Snackbar cuando errorMessage cambia
@@ -248,13 +282,20 @@ fun MapScreen(
             selectedSpot?.let { spot ->
                 SpotInfoCard(
                     spot = spot,
+                    onDelete = {
+                        //Llamamos al ViewModel
+                        viewModel.deleteSpot(spot)
+
+                        // Cierra la Card
+                        selectedSpot = null
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(16.dp)
                 )
             }
 
-            // Indicador de carga centrado
+            //Loading centrado
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center)
@@ -393,26 +434,23 @@ private fun SpotMap(
  * @param spot El spot a mostrar
  * @param modifier Modifier para personalizar posición y padding
  */
+@SuppressLint("DefaultLocale")
 @Composable
 private fun SpotInfoCard(
     spot: SpotEntity,
+    onDelete: () -> Unit, // Callback nuevo
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 8.dp
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Imagen del spot con loading state
             SubcomposeAsyncImage(
                 model = spot.imageUri.toUri(),
                 contentDescription = spot.title,
@@ -420,44 +458,39 @@ private fun SpotInfoCard(
                     .size(280.dp, 160.dp)
                     .clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop,
-                loading = {
-                    // Mostrar spinner mientras carga
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(32.dp),
-                            strokeWidth = 2.dp
-                        )
-                    }
-                },
-                success = {
-                    // Mostrar imagen cuando está lista
-                    SubcomposeAsyncImageContent()
-                }
+                loading = { CircularProgressIndicator() }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Título del spot
-            Text(
-                text = spot.title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
-            )
+            // Fila: Texto a la izquierda, Basurero a la derecha
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = spot.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${String.format("%.4f", spot.latitude)}, ${String.format("%.4f", spot.longitude)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Coordenadas formateadas
-            Text(
-                text = "📍 ${String.format("%.4f", spot.latitude)}, ${String.format("%.4f", spot.longitude)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+                // Botón de eliminar
+                androidx.compose.material3.IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Eliminar",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 }

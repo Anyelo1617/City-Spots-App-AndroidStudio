@@ -9,6 +9,7 @@ import com.curso.android.module4.cityspots.utils.CameraUtils
 import com.curso.android.module4.cityspots.utils.CoordinateValidator
 import com.curso.android.module4.cityspots.utils.LocationUtils
 import kotlinx.coroutines.flow.Flow
+import androidx.core.net.toUri
 
 /**
  * =============================================================================
@@ -173,10 +174,17 @@ class SpotRepository(
     suspend fun createSpot(imageCapture: ImageCapture): CreateSpotResult {
         // Capturamos la foto (ahora se maneja errores)
         val photoUri = try {
-            cameraUtils.capturePhoto(imageCapture)
+            capturePhoto(imageCapture)
         } catch (e: Exception) {
-            // Retornamos el error encapsulado
             return CreateSpotResult.CameraError(e)
+        }
+
+        // Validamos que el archivo tenga contenido real
+        val size = cameraUtils.getImageSize(photoUri)
+        if(size <= 0){
+            //Si el archivo está vacío o corrupto lo borramos y damos error
+            cameraUtils.deleteImage(photoUri)
+            return CreateSpotResult.CameraError(Exception("Error: La imagen capturada está vacía o corrupta."))
         }
 
         // Obtenemos la ubi
@@ -195,13 +203,31 @@ class SpotRepository(
 
         // se guarda en BD
         val spot = SpotEntity(
-            title = "Spot #${spotDao.getSpotCount() + 1}",
+            title = "Spot #${getSpotCount() + 1}",
             imageUri = photoUri.toString(),
             latitude = location.latitude,
             longitude = location.longitude
         )
-        val id = spotDao.insertSpot(spot)
+        val id = insertSpot(spot)
         return CreateSpotResult.Success(spot.copy(id = id))
+    }
+
+    //Agregamos la capacidad de borrar tanto el archivo físico como el registro de la BD
+    suspend fun deleteSpot(spot: SpotEntity) {
+
+        // Usamos getSpotById() para verificar que exista en BD antes de proceder
+        if (getSpotById(spot.id) == null) return
+        try {
+            val uri = spot.imageUri.toUri()
+            // Solo intentamos borrar si el archivo físico realmente existe
+            if (cameraUtils.imageExists(uri)) {
+                cameraUtils.deleteImage(uri)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        // Borrar de la base de datos
+        spotDao.deleteSpotById(spot.id)
     }
 }
 
@@ -220,18 +246,4 @@ sealed class CreateSpotResult {
 
     //Camera Error
     data class CameraError(val exception: Exception) : CreateSpotResult()
-}
-
-//Agregamos la capacidad de borrar tanto el archivo físico como el registro de la BD
-suspend fun deleteSpot(spot: SpotEntity) {
-    // Intenta borrar el archivo de imagen
-    try {
-        // Parseamos el String a Uri
-        cameraUtils.deleteImage(android.net.Uri.parse(spot.imageUri))
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-
-    // Se Borra de la base de datos
-    spotDao.deleteSpotById(spot.id)
 }

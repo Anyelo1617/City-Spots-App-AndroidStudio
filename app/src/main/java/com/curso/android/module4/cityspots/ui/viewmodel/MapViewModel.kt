@@ -136,6 +136,7 @@ class MapViewModel(
         viewModelScope.launch {
             repository.getLocationUpdates()
                 .collect { location ->
+                    // Actualiza la posición cada vez que el GPS detecta movimiento
                     _userLocation.value = LatLng(location.latitude, location.longitude)
                 }
         }
@@ -175,9 +176,8 @@ class MapViewModel(
                         _captureResult.value = false
                     }
 
-                    //NUEVO CASO:
                     is CreateSpotResult.CameraError -> {
-                        _errorMessage.value = result.exception.message ?: "Error desconocido de cámara"
+                        _errorMessage.value = "Error de cámara: ${result.exception.message}"
                         _captureResult.value = false
                     }
                 }

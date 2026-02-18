@@ -144,7 +144,7 @@ class CameraUtils(private val context: Context) {
         return try {
             val file = File(uri.path ?: return false)
             file.delete()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -159,7 +159,7 @@ class CameraUtils(private val context: Context) {
         return try {
             val file = File(uri.path ?: return -1)
             file.length()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             -1
         }
     }
@@ -174,7 +174,7 @@ class CameraUtils(private val context: Context) {
         return try {
             val file = File(uri.path ?: return false)
             file.exists()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
