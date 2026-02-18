@@ -105,10 +105,18 @@ class CameraUtils(private val context: Context) {
                     }
 
                     override fun onError(exception: ImageCaptureException) {
-                        // Error: propagar excepción
-                        // Limpiar archivo si se creó pero falló la escritura
+                        // 1. Limpiar archivo si se creó pero falló la escritura
                         photoFile.delete()
-                        continuation.resumeWithException(exception)
+
+                        // 2. Convertir error de CameraX a nuestra excepción simple
+                        val domainException = when (exception.imageCaptureError) {
+                            ImageCapture.ERROR_FILE_IO -> PhotoCaptureException.StorageFullException("No hay espacio suficiente o error de disco.")
+                            ImageCapture.ERROR_CAMERA_CLOSED -> PhotoCaptureException.CameraUnavailableException("La cámara está cerrada o en uso por otra app.")
+                            else -> PhotoCaptureException.UnknownException("Error desconocido: ${exception.message}")
+                        }
+
+                        // 3. Devolver la excepción específica
+                        continuation.resumeWithException(domainException)
                     }
                 }
             )
@@ -170,4 +178,13 @@ class CameraUtils(private val context: Context) {
             false
         }
     }
+}
+
+/**
+ * Excepciones personalizadas para errores de cámara
+ */
+sealed class PhotoCaptureException(message: String) : Exception(message) {
+    class StorageFullException(message: String) : PhotoCaptureException(message)
+    class CameraUnavailableException(message: String) : PhotoCaptureException(message)
+    class UnknownException(message: String) : PhotoCaptureException(message)
 }

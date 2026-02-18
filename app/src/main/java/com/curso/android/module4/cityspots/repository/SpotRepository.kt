@@ -171,47 +171,36 @@ class SpotRepository(
      * @throws Exception si falla la captura de foto
      */
     suspend fun createSpot(imageCapture: ImageCapture): CreateSpotResult {
-        // 1. Capturar la foto
-        val photoUri = capturePhoto(imageCapture)
+        // Capturamos la foto (ahora se maneja errores)
+        val photoUri = try {
+            cameraUtils.capturePhoto(imageCapture)
+        } catch (e: Exception) {
+            // Retornamos el error encapsulado
+            return CreateSpotResult.CameraError(e)
+        }
 
-        // 2. Obtener ubicación actual
-        val location = getCurrentLocation()
-
-        // Si no hay ubicación, no podemos crear el spot
+        // Obtenemos la ubi
+        val location = locationUtils.getCurrentLocation()
         if (location == null) {
-            // Limpiar la foto capturada para no dejar archivos huérfanos
             cameraUtils.deleteImage(photoUri)
             return CreateSpotResult.NoLocation
         }
 
-        // 3. Validar coordenadas GPS
-        val validationResult = coordinateValidator.validate(
+        // Validamos coordenadas
+        val validationResult = coordinateValidator.validate(location.latitude, location.longitude)
+        if (validationResult != CoordinateValidator.ValidationResult.Valid) {
+            cameraUtils.deleteImage(photoUri)
+            return CreateSpotResult.InvalidCoordinates(coordinateValidator.getErrorMessage(validationResult))
+        }
+
+        // se guarda en BD
+        val spot = SpotEntity(
+            title = "Spot #${spotDao.getSpotCount() + 1}",
+            imageUri = photoUri.toString(),
             latitude = location.latitude,
             longitude = location.longitude
         )
-
-        if (validationResult != CoordinateValidator.ValidationResult.Valid) {
-            // Limpiar la foto si las coordenadas son inválidas
-            cameraUtils.deleteImage(photoUri)
-            val errorMessage = coordinateValidator.getErrorMessage(validationResult)
-            return CreateSpotResult.InvalidCoordinates(errorMessage)
-        }
-
-        // 4. Generar título secuencial
-        val spotNumber = getSpotCount() + 1
-        val title = "Spot #$spotNumber"
-
-        // 5. Crear y guardar la entidad
-        val spot = SpotEntity(
-            imageUri = photoUri.toString(),
-            latitude = location.latitude,
-            longitude = location.longitude,
-            title = title
-        )
-
-        val id = insertSpot(spot)
-
-        // Retornar el spot con el ID generado
+        val id = spotDao.insertSpot(spot)
         return CreateSpotResult.Success(spot.copy(id = id))
     }
 }
@@ -228,4 +217,21 @@ sealed class CreateSpotResult {
     data class Success(val spot: SpotEntity) : CreateSpotResult()
     data object NoLocation : CreateSpotResult()
     data class InvalidCoordinates(val message: String) : CreateSpotResult()
+
+    //Camera Error
+    data class CameraError(val exception: Exception) : CreateSpotResult()
+}
+
+//Agregamos la capacidad de borrar tanto el archivo físico como el registro de la BD
+suspend fun deleteSpot(spot: SpotEntity) {
+    // Intenta borrar el archivo de imagen
+    try {
+        // Parseamos el String a Uri
+        cameraUtils.deleteImage(android.net.Uri.parse(spot.imageUri))
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+
+    // Se Borra de la base de datos
+    spotDao.deleteSpotById(spot.id)
 }
