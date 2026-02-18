@@ -80,3 +80,6 @@ lint/tmp/
 
 # Kotlin
 .kotlin/
+
+# Personal Configuration
+.idea/
