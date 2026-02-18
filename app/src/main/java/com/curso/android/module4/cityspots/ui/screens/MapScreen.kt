@@ -1,6 +1,7 @@
 package com.curso.android.module4.cityspots.ui.screens
 
 import android.Manifest
+import android.R.attr.bottom
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -238,17 +240,6 @@ fun MapScreen(
     // =========================================================================
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToCamera,
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Agregar Spot"
-                )
-            }
-        }
     ) { paddingValues ->
         /**
          * CONCEPTO: Estado local para selección
@@ -299,6 +290,22 @@ fun MapScreen(
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center)
+                )
+            }
+
+            // 4. NUEVA POSICIÓN DEL BOTÓN FLOTANTE
+            FloatingActionButton(
+                onClick = onNavigateToCamera,
+                containerColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd) // pegamos a la esquina inferior derecha
+                    // end: 12.dp para alinearlo con los controles del mapa.
+                    // bottom: 110.dp para que quede arriba del zoom.
+                    .padding(end = 12.dp, bottom = 110.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Agregar Spot"
                 )
             }
         }
@@ -487,7 +494,7 @@ private fun SpotInfoCard(
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Eliminar",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = Color.DarkGray
                     )
                 }
             }
