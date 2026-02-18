@@ -174,6 +174,12 @@ class MapViewModel(
                         _errorMessage.value = result.message
                         _captureResult.value = false
                     }
+
+                    //NUEVO CASO:
+                    is CreateSpotResult.CameraError -> {
+                        _errorMessage.value = result.exception.message ?: "Error desconocido de cámara"
+                        _captureResult.value = false
+                    }
                 }
             } catch (e: Exception) {
                 _errorMessage.value = "Error al capturar: ${e.message}"
@@ -198,5 +204,20 @@ class MapViewModel(
         _errorMessage.value = null
     }
 
+    //función de borrar para que la UI pueda llamarla
+    fun deleteSpot(spot: SpotEntity) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                repository.deleteSpot(spot)
+            }
+            catch (e: Exception) {
+                _errorMessage.value = "Error al eliminar: ${e.message}"
+            }
+            finally {
+                _isLoading.value = false
+            }
+        }
+    }
 
 }
