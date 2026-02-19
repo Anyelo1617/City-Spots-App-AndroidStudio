@@ -171,4 +171,4 @@ app/src/main/java/com/curso/android/module4/cityspots/
 ---
 
 **Link al video explicativo:** 
-
+https://youtube.com/shorts/G5ZB0bz6R-Y?feature=share
